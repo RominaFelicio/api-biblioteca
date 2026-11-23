@@ -111,6 +111,46 @@ cargar_libros()
 def inicio():
     return {"API MI BIBLIOTECA"}
 
+# I9 - BUSCAR POR TEXTO
+
+@app.get("/libros/buscar", response_model=list[Libro])
+def buscar_libros(texto: str = Query(..., min_length=1)):
+    texto = texto.strip().lower()
+
+    resultados = [
+        libro for libro in libros
+        if texto in libro["titulo"].lower()
+        or texto in libro["autor"].lower()
+    ]
+
+    return sorted(resultados, key=lambda libro: libro["id"])
+
+
+# F2 - I3 - I4 LISTAR, FILTRAR Y PAGINAR
+
+@app.get("/libros", response_model=list[Libro])
+def listar_libros(
+    autor: str | None = None,
+    disponible: bool | None = None,
+    desde: int = Query(default=0, ge=0),
+    limite: int = Query(default=100, ge=1)
+):
+    resultado = sorted(libros, key=lambda libro: libro["id"])
+
+    if autor is not None:
+        resultado = [
+            libro for libro in resultado
+            if libro["autor"].lower() == autor.lower()
+        ]
+
+    if disponible is not None:
+        resultado = [
+            libro for libro in resultado
+            if libro["disponible"] is disponible
+        ]
+
+    return resultado[desde:desde + limite]
+
 
 
 
