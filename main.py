@@ -2,8 +2,9 @@ from pathlib import Path
 import json
 import logging
 
+from opentelemetry.trace import Status
 from pydantic import BaseModel, ConfigDict, Field
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, status
 
 # Configurar el logger
 logging.basicConfig(level=logging.INFO)
@@ -151,7 +152,107 @@ def listar_libros(
 
     return resultado[desde:desde + limite]
 
+# F3 - I1 - I6 CREAR LIBRO
 
+@app.post(
+    "/libros",
+    response_model=Libro,
+    status_code=status.HTTP_201_CREATED # type: ignore
+)
+def crear_libro(datos: LibroEntrada):
+    global siguiente_id
+
+    for libro in libros:
+        if (
+            libro["titulo"].lower() == datos.titulo.lower()
+            and libro["autor"].lower() == datos.autor.lower()
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Ya existe un libro con ese titulo y autor"
+            )
+
+    nuevo_libro = {
+        "id": siguiente_id,
+        "titulo": datos.titulo,
+        "autor": datos.autor,
+        "anio": datos.anio,
+        "disponible": datos.disponible
+    }
+
+    libros.append(nuevo_libro)
+    siguiente_id += 1
+
+    libros.sort(key=lambda libro: libro["id"])
+    guardar_libros()
+
+    logger.info("Libro creado: %s", nuevo_libro["id"])
+
+    return nuevo_libro
+
+
+# F4 - F5 CONSULTAR POR ID
+
+@app.get("/libros/{libro_id}", response_model=Libro)
+def obtener_libro(libro_id: int):
+    return buscar_libro_por_id(libro_id)
+
+
+# I2 ACTUALIZAR COMPLETAMENTE (PUT)
+
+@app.put("/libros/{libro_id}", response_model=Libro)
+def reemplazar_libro(libro_id: int, datos: LibroEntrada):
+    libro = buscar_libro_por_id(libro_id)
+
+    libro["titulo"] = datos.titulo
+    libro["autor"] = datos.autor
+    libro["anio"] = datos.anio
+    libro["disponible"] = datos.disponible
+
+    guardar_libros()
+    logger.info("Libro reemplazado: %s", libro_id)
+
+    return libro
+
+
+# I5 ACTUALIZAR PARCIALMENTE (PATCH)
+
+@app.patch("/libros/{libro_id}", response_model=Libro)
+def actualizar_libro(libro_id: int, datos: LibroActualizacion):
+    libro = buscar_libro_por_id(libro_id)
+
+    cambios = datos.model_dump(exclude_unset=True)
+
+    if any(valor is None for valor in cambios.values()):
+        raise HTTPException(
+            status_code=422,
+            detail="Los campos enviados no pueden ser null"
+        )
+
+    for campo, valor in cambios.items():
+        libro[campo] = valor
+
+    guardar_libros()
+    logger.info("Libro actualizado: %s", libro_id)
+
+    return libro
+
+
+# F6 ELIMINAR LIBRO
+
+@app.delete(
+    "/libros/{libro_id}",
+    status_code=status.HTTP_204_NO_CONTENT # type: ignore
+)
+def eliminar_libro(libro_id: int):
+    libro = buscar_libro_por_id(libro_id)
+
+    libros.remove(libro)
+    guardar_libros()
+
+    logger.info("Libro eliminado: %s", libro_id)
+
+    
 
 
 
